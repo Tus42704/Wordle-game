@@ -13,64 +13,24 @@ const keyboard = document.getElementById("keyboard");
 const message = document.getElementById("message");
 const newGameButton = document.getElementById("new-game");
 const confettiLayer = document.getElementById("confetti-layer");
-const customWordInput = document.getElementById("custom-word");
-const setWordButton = document.getElementById("set-word");
-const shareLinkButton = document.getElementById("share-link");
-const shareStatus = document.getElementById("share-status");
+const guessInput = document.getElementById("guess-input");
+const submitGuessButton = document.getElementById("submit-guess");
 
 const keyboardRows = [
   ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
   ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
-  ["ENTER", "Z", "X", "C", "V", "B", "N", "M", "BACK"]
+  ["BACK", "Z", "X", "C", "V", "B", "N", "M", "ENTER"]
 ];
 
 let answer = "";
 let guesses = [];
-let currentGuess = "";
+let guessScores = [];
 let gameOver = false;
-let letterStates = {};
 let confettiTimeoutId = null;
-let customAnswer = "";
-let loadedFromSharedLink = false;
+let letterStates = {};
 
 function randomWord() {
   return WORDS[Math.floor(Math.random() * WORDS.length)];
-}
-
-function normalizeWord(value) {
-  return value.trim().toUpperCase().replace(/[^A-Z]/g, "");
-}
-
-function encodeWord(word) {
-  return btoa(word).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function decodeWord(value) {
-  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
-  const padding = "=".repeat((4 - normalized.length % 4) % 4);
-
-  try {
-    return atob(normalized + padding);
-  } catch {
-    return "";
-  }
-}
-
-function getWordFromUrl() {
-  const params = new URLSearchParams(window.location.search);
-  const encodedWord = params.get("word");
-  if (!encodedWord) {
-    return "";
-  }
-
-  const decodedWord = normalizeWord(decodeWord(encodedWord));
-  return decodedWord.length === WORD_LENGTH ? decodedWord : "";
-}
-
-function buildShareUrl(word) {
-  const url = new URL(window.location.href);
-  url.searchParams.set("word", encodeWord(word));
-  return url.toString();
 }
 
 function createBoard() {
@@ -109,7 +69,7 @@ function createKeyboard() {
         key.classList.add("wide");
       }
 
-      key.addEventListener("click", () => handleInput(keyValue));
+      key.addEventListener("click", () => handleKeyboardClick(keyValue));
       row.appendChild(key);
     });
 
@@ -120,12 +80,17 @@ function createKeyboard() {
 function updateBoard() {
   for (let rowIndex = 0; rowIndex < MAX_ATTEMPTS; rowIndex += 1) {
     const guess = guesses[rowIndex] || "";
-    const activeWord = rowIndex === guesses.length ? currentGuess : guess;
+    const score = guessScores[rowIndex] || [];
 
     for (let colIndex = 0; colIndex < WORD_LENGTH; colIndex += 1) {
       const tile = document.getElementById(`tile-${rowIndex}-${colIndex}`);
-      tile.textContent = activeWord[colIndex] || "";
-      tile.classList.toggle("filled", Boolean(activeWord[colIndex]));
+      tile.className = "tile";
+      tile.textContent = guess[colIndex] || "";
+      tile.classList.toggle("filled", Boolean(guess[colIndex]));
+
+      if (score[colIndex]) {
+        tile.classList.add(score[colIndex]);
+      }
     }
   }
 }
@@ -161,9 +126,10 @@ function applyGuessColors(guess, score, rowIndex) {
     const tile = document.getElementById(`tile-${rowIndex}-${colIndex}`);
     tile.classList.add(state);
 
-    const existing = letterStates[guess[colIndex]];
+    const letter = guess[colIndex];
+    const existing = letterStates[letter];
     if (!existing || statePriority(state) > statePriority(existing)) {
-      letterStates[guess[colIndex]] = state;
+      letterStates[letter] = state;
     }
   });
 
@@ -199,10 +165,6 @@ function setMessage(text) {
   message.textContent = text;
 }
 
-function setShareStatus(text) {
-  shareStatus.textContent = text;
-}
-
 function clearConfetti() {
   if (confettiTimeoutId) {
     clearTimeout(confettiTimeoutId);
@@ -232,166 +194,97 @@ function launchConfetti() {
   confettiTimeoutId = setTimeout(clearConfetti, 4200);
 }
 
-function updateShareInput() {
-  customWordInput.value = loadedFromSharedLink ? "" : customAnswer;
-}
-
-function applyCustomWord(word) {
-  customAnswer = word;
-  loadedFromSharedLink = false;
-  const url = new URL(window.location.href);
-
-  if (word) {
-    url.searchParams.set("word", encodeWord(word));
-    window.history.replaceState({}, "", url);
-    setShareStatus("Custom puzzle loaded. Use Copy Link to share it.");
-  } else {
-    url.searchParams.delete("word");
-    window.history.replaceState({}, "", url);
-    setShareStatus("Random puzzle loaded. Leave blank to play a random puzzle.");
-  }
-
-  updateShareInput();
-  resetGame();
-}
-
-async function copyShareLink() {
-  const nextWord = normalizeWord(customWordInput.value);
-  const wordToShare = nextWord.length === WORD_LENGTH ? nextWord : customAnswer || answer;
-
-  if (!wordToShare || wordToShare.length !== WORD_LENGTH) {
-    setShareStatus("Enter a valid 5-letter word first.");
+function handleKeyboardClick(keyValue) {
+  if (gameOver) {
     return;
   }
 
-  const shareUrl = buildShareUrl(wordToShare);
-
-  try {
-    await navigator.clipboard.writeText(shareUrl);
-    setShareStatus("Share link copied. Send it to your friends.");
-  } catch {
-    setShareStatus(`Copy failed. Share this URL: ${shareUrl}`);
-  }
-}
-
-function handleSetWord() {
-  const nextWord = normalizeWord(customWordInput.value);
-
-  if (nextWord.length !== WORD_LENGTH) {
-    setShareStatus("Custom words must be exactly 5 letters.");
+  if (keyValue === "ENTER") {
+    submitGuess();
     return;
   }
 
-  applyCustomWord(nextWord);
+  if (keyValue === "BACK") {
+    guessInput.value = guessInput.value.slice(0, -1);
+    guessInput.focus();
+    return;
+  }
+
+  if (guessInput.value.length < WORD_LENGTH) {
+    guessInput.value += keyValue;
+    guessInput.focus();
+  }
 }
 
 function submitGuess() {
-  if (currentGuess.length < WORD_LENGTH) {
+  if (gameOver) {
+    return;
+  }
+
+  const guess = guessInput.value.trim().toUpperCase();
+
+  if (guess.length < WORD_LENGTH) {
     setMessage("Your guess needs 5 letters.");
     return;
   }
 
-  const guess = currentGuess;
   const rowIndex = guesses.length;
-  guesses.push(guess);
-  currentGuess = "";
-  updateBoard();
-
   const score = scoreGuess(guess);
+  guesses.push(guess);
+  guessScores.push(score);
+  updateBoard();
   applyGuessColors(guess, score, rowIndex);
+  guessInput.value = "";
 
   if (guess === answer) {
     gameOver = true;
     setMessage(`You got it. The word was ${answer}.`);
     launchConfetti();
+    guessInput.disabled = true;
+    submitGuessButton.disabled = true;
     return;
   }
 
   if (guesses.length === MAX_ATTEMPTS) {
     gameOver = true;
     setMessage(`Out of tries. The word was ${answer}.`);
+    guessInput.disabled = true;
+    submitGuessButton.disabled = true;
     return;
   }
 
   setMessage(`${MAX_ATTEMPTS - guesses.length} tries left.`);
 }
 
-function handleInput(input) {
-  if (gameOver) {
-    return;
-  }
-
-  if (input === "ENTER") {
-    submitGuess();
-    return;
-  }
-
-  if (input === "BACK") {
-    currentGuess = currentGuess.slice(0, -1);
-    updateBoard();
-    return;
-  }
-
-  if (/^[A-Z]$/.test(input) && currentGuess.length < WORD_LENGTH) {
-    currentGuess += input;
-    updateBoard();
-  }
-}
-
-function handlePhysicalKeyboard(event) {
-  if (document.activeElement === customWordInput) {
-    if (event.key === "Enter") {
-      handleSetWord();
-    }
-    return;
-  }
-
-  if (event.ctrlKey || event.metaKey || event.altKey) {
-    return;
-  }
-
-  const key = event.key.toUpperCase();
-
-  if (key === "ENTER") {
-    handleInput("ENTER");
-    return;
-  }
-
-  if (key === "BACKSPACE") {
-    handleInput("BACK");
-    return;
-  }
-
-  if (/^[A-Z]$/.test(key)) {
-    handleInput(key);
-  }
-}
-
 function resetGame() {
   clearConfetti();
-  answer = customAnswer || randomWord();
+  answer = randomWord();
   guesses = [];
-  currentGuess = "";
+  guessScores = [];
   gameOver = false;
   letterStates = {};
   setMessage("Start with any 5-letter word.");
+  guessInput.value = "";
+  guessInput.disabled = false;
+  submitGuessButton.disabled = false;
   createBoard();
   createKeyboard();
   updateBoard();
+  updateKeyboard();
+  guessInput.focus();
 }
 
-document.addEventListener("keydown", handlePhysicalKeyboard);
-newGameButton.addEventListener("click", resetGame);
-setWordButton.addEventListener("click", handleSetWord);
-shareLinkButton.addEventListener("click", copyShareLink);
-customWordInput.addEventListener("input", () => {
-  customWordInput.value = normalizeWord(customWordInput.value);
+guessInput.addEventListener("input", () => {
+  guessInput.value = guessInput.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, WORD_LENGTH);
 });
 
-customAnswer = getWordFromUrl();
-loadedFromSharedLink = Boolean(customAnswer);
-updateShareInput();
-if (customAnswer) {
-  setShareStatus("Shared puzzle loaded. The answer is hidden until the game ends.");
-}
+guessInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    submitGuess();
+  }
+});
+
+submitGuessButton.addEventListener("click", submitGuess);
+newGameButton.addEventListener("click", resetGame);
+
 resetGame();
