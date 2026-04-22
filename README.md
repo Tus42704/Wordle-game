@@ -1,6 +1,6 @@
 # Project title: Mini wordle-game
 
-Description of what the app does: Mini Wordle is a browser based word guessing game inspired by the classic wordle gamer format where players try to guess a hidden 5 letter word within 6 attempts. After each guess, the gme provides color coded feedback to show how close the user is to guessing the correct word.
+Description of what the app does: Mini Wordle is a browser based word guessing game inspired by the classic wordle gamer format where players try to guess a hidden 5 letter word within 6 attempts. After each guess, the gme provides color coded feedback to show how close the user is to guessing the correct word. The words that are avaliable are randomized within a set word bank, but new words can be added by the user.
 
 Features list:
 - Interactive 5 letter word guessing board
