@@ -12,7 +12,6 @@ Features list:
   
 Update: 
 - Adds confetti to the game when the user guesses the correct word within the 6 alloted attempts.
-- Allows the user to use the interface to create their own words to send to their friends to play. 
   
 Step-by-step instructions to run the app
 - Download or create the following files
