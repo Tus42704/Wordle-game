@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10,6 +11,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <div id="confetti-layer" class="confetti-layer" aria-hidden="true"></div>
   <main class="app">
     <section class="hero">
       <p class="eyebrow">Guess the hidden word</p>
@@ -21,6 +23,11 @@
       <div class="status-row">
         <p id="message" class="message">Start with any 5-letter word.</p>
         <button id="new-game" class="new-game" type="button">New Game</button>
+      </div>
+
+      <div class="guess-controls">
+        <input id="guess-input" class="guess-input" type="text" maxlength="5" placeholder="Type a word" autocomplete="off" aria-label="Enter a 5-letter word">
+        <button id="submit-guess" class="submit-guess" type="button">Submit</button>
       </div>
 
       <div id="board" class="board" aria-label="Wordle board"></div>
